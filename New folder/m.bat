@@ -1,0 +1,2 @@
+Set _COMPAT_LAYER=RunAsInvoker
+Start MEGAcmdSetup64.exe

